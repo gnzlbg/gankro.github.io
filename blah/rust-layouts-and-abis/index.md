@@ -271,7 +271,7 @@ The following annotations have the following effects on layout and ABI:
 
 * `#[repr(C)]` on a struct forces the fields to be laid out in the order of their declaration with the same greedy padding rules as C. If all the fields have a fully defined layout, then the type has a fully defined layout. Note that this annotation has pure-rust applications such as type-punning or inheritance, and that `#[repr(C)]` doesn't actually guarantee that the type is FFI-safe.
 
-* `#[repr(simd)]` on a struct is the same as `#[repr(C)]`, except it gives the type the vector type-kind. This feature is currently unstable without any proposed path to stabilization. Longterm, stable vector-kind types should be available in the stdlib. Short-term they are unstably available in the `simd` crate.
+* `#[repr(simd)]` on a struct is the same as `#[repr(C)]`, except it gives the type the vector type-kind. This feature is currently unstable without any proposed path to stabilization. Longterm, stable vector-kind types should be available in the stdlib. Short-term they are unstably available in the `packed_simd` crate.
 
 * `#[repr(transparent)]` on a struct with a single field gives it the ABI of its field. So if it contains an `i32`, it has the ABI of `i32`. Generally this is only necessary to get a matching type-kind, as size and alignment will otherwise naturally match the field. This is especially useful for making FFI-safe newtyped integers (like for typed units).
 
@@ -331,9 +331,9 @@ There was a really great compiler dev (gcc?) email about this history but I can'
 
 For integers and floats, endianness (AKA byte-order) specifies how the individual bytes of the value are ordered. In a big-endian encoding they're written out like you would write numbers on paper: the most significant bytes come first. In a little-endian system the least significant bytes come first. As far as I can tell this is basically the systems programming version of oxford commas, in that it really doesn't matter much but everyone has strong opinions so you regularly see both.
 
-These days little-endian has largely won the battle for what new hardware uses as its native format (e.g. all x64 chips and most ARM chips), while big-endian has been relegated to being the storage/wire encoding for a bunch of random formats.
+These days little-endian has largely won the battle for what new hardware uses as its native format (e.g. all x64 chips and most ARM chips), while big-endian has been relegated to being the storage/wire encoding for a bunch of random formats (e.g. IPv4, IPv6, TCP, and UDP, etc.).
 
-With that said, it's really easy to write programs that are agnostic to the native endianness of a platform, so it's really not a big deal for Rust to support the remaining big-endian platforms.
+With that said, it's really easy to write programs that are agnostic to the native endianness of a platform, so it's really not a big deal for Rust to support the remaining big-endian platforms (note: `unsafe` Rust features like `transmute`, `union` type punning, etc. can introduce endian-dependent behavior). 
 
 
 
