@@ -245,7 +245,7 @@ Here is a table of the ABIs of the core primitives in Rust, which C/C++ types th
 | &mut T         | ptr  | ptr   | integer | T*                | not null                    |
 | Option<&T>     | ptr  | ptr   | integer | T*                | all                         |
 | Option<&mut T> | ptr  | ptr   | integer | T*                | all                         |
-| bool           | 1    | 1     | integer | bool (_Bool)      | 0=false, 1=true             |
+| bool           | ≥1   | ≥1    | integer | bool (_Bool)      | 0=false, 1=true             |
 | char           | 4    | ≤4    | N/A     | N/A               | 0x0-0xD7FF, 0xE000-0x10FFFF |
 | f32            | 4    | ≤4    | float   | float             | all                         |
 | f64            | 8    | ≤8    | float   | double            | all                         |
