@@ -4,31 +4,33 @@
 
 <span class="date">May 16th, 2019 -- Rust Nightly 1.36.0</span>
 
-Rust's infamous mem::uninitialized method has been deprecated. Its replacement, [MaybeUninit][], has been stabilized. If you are using the former, you should migrate to using the latter as soon as possible. This was done because it was determined that mem::uninitialized was fundamentally broken, and could not be made to work.
+Rust's infamous [`mem::uninitialized`] method has been deprecated. Its replacement, [`MaybeUninit`], has been stabilized. If you are using the former, you should migrate to using the latter as soon as possible. This was done because it was determined that [`mem::uninitialized`] was, in general, impossible or really really hard to use correctly.
 
 Most of this post is dedicated to discussing the nature of uninitialized memory and how it can be worked with in Rust. [Feel free to skip to the details on why mem::uninitialized is broken][section-what-went-wrong].
 
+[`mem::uninitialized`]:
+[`MaybeUninit`]:
 
-
-
-
-# What's Uninitialized Memory?
+# What's uninitialized memory: What is it? Why is it useful? Why is it dangerous?
 
 When you allocate memory in Rust it arrives to you in an *uninitialized* state. What exactly that means is a surprisingly subtle issue.
 
-From a low-level implementation perspective, this generally just means that some region of memory has been declared to be "yours", but because that memory could have been previously used for something else, there's no guarantee what the bits in that memory are set to. Why are old values from somewhere else still there? Because it's faster and easier to not bother to clear out the memory. If you read from uninitialized memory, you are essentially reading random bits, and so your program may behave randomly. From this perspective, it's almost always a serious bug to read from uninitialized memory. Although you could certainly construct cases where that's not the case.
+From a "hardware perspective", this generally just means that some region of memory has been declared to be "yours", but because that memory could have been previously used for something else, there's no guarantee what the bits in that memory are set to. Why are old values from somewhere else still there? Because it's faster and easier to not bother to clear out the memory. If you read from uninitialized memory, you are often just reading random bits. If your program execution depends on the value of these random bits, it will behave randomly, and that is often a serious bug.
 
-Note that this model is one of a single process that recycles memory it is has acquired from the operating system without returning it. For security reasons, memory freshly acquired from your operating system is guaranteed to be initialized to all 0's. [Although there are certainly security-minded folks who would love for processes to do this internally as well][memset].
+For Rust programmers, the "hardware perspective" is not the only relevant one. Rust programmers don't write machine code directly, they write Rust code, and from Rust perspective, things are a bit different, and sadly, due to Rust reliance on LLVM, things are [not very precisely specified][undef]. The long and the short of it is that the Rust compiler considers program executions that depends on the _content_ of uninitialized memory a bug, and assumes that it will not happen. Copying uninitialized memory around is ok, but, e.g., branching on it, is not. From Rust point-of-view, bits do not only have two values, `0` or `1`, but three values: `0`, `1`, or `uninitialized`, where `uninitialized` means "anything". This is important for some of the optimizations that Rusts performs. For example, simplifying `y & x => y` requires proving that `x` is all 1's. If `x` bits are all `uninitialized`, because that might be anything at run-time, Rust can assume in this case, that in some program execution all bits could be `1`, and therefore optimizing this program is ok. For `y | x => y` Rust can assume it's all 0's. Whatever's most convenient at the time!
 
-The theoretical perspective is a bit more strict, [and also poorly specified][undef]. The long and the short of it is that compilers consider uninitialized memory to be a much more exotic thing. Something of a magical substance that turns into whatever value makes the compiler's life easiest. Say you wanted to apply the simplification `y & x => y`. That requires proving that `x` is all 1's. Oh it's uninitialized memory? Ok let's just assume it's all 1's. For `y | x` you can assume it's all 0's. Whatever's most convenient at the time!
+Another useful optimization is deleting code that is unreachable. This is particularly useful for generic code or code expanded for macros, where some parts might or might not be unreachable depending on the arguments used to expand this code. If you have `if x > 1 { ... }` and `x` (or some part of it) is `uninitialized`, the compiler can just assume that this execution path will not be reached, and delete all code unconditionally leading to it, making your programs much smaller by just keeping around the code that will actually be executed.
 
-Unfortunately, what compilers most love in the world is to prove that something is Undefined Behaviour. Undefined Behaviour means they can apply aggressive optimizations and make everything go fast! ...Usually by deleting all your code.
+So we have seen that uninitialized memory allows the Rust implementation to optimize your programs bettar, but it also allows _you_ to write more efficient code. For example, suppose that you write a program that receives some bytes from the network into a buffer, and allocates a fresh buffer for that. That buffer might be big, and touching all that memory might be slow. Uninitialized memory allows you to leave that memory uninitialized, and when the data is written for the network into your buffer, it will initialize it, touching the memory only once. Great right? 
 
-So as a conservative model it's reasonable to just declare that **it is Undefined Behaviour to read uninitialized memory**. Full stop.
+This is indeed great, and allowing users to write programs that contain these types of optimizations is the main reason why uninitialized memory is exposed to Rust programmers. The main problem is the danger that writing this type of code involves: your code might have a bug, and this bug might allow Rust to optimize your program "incorrectly" from your point-of-view, but "correctly" from the point-of-view of the Rust language.
 
+Why was [`mem::uninitialized`] deprecated? Because it made it trival to write code that has these types of bugs, and made it really really hard, often impossible, to write code without them. 
 
+# Why is uninitialized memory useful? 
 
-
+So one could conclude that uninitialized memory is dangerous, and therefore it should not be used. The problem is that it is sometimes very useful. For example, suppose you want to receive some bytes from the network into a buffer, and you allocate a new buffer for these. 
+You could zero all bytes in the buffer to avoid uninitialized memory, but if your program does that, it would probably right immediately after write some other bytes to it. Writing zeros, o and would be traversing that memory twice, which could be expensive. 
 
 # Safely Working With Uninitialized Memory In Rust
 
